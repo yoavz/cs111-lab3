@@ -19,7 +19,7 @@
  * ospfsmod
  *
  *   This is the OSPFS module!  It contains both library code for your use,
- *   and exercises where you must add code.
+ *   and exercises where you must add code!
  *
  ****************************************************************************/
 
