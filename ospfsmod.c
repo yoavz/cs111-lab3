@@ -924,7 +924,7 @@ change_size(ospfs_inode_t *oi, uint32_t new_size)
 			while (ospfs_size2nblocks(oi->oi_size) > old_blocks) {
 				if (remove_block(oi) == -EIO) {
 					eprintk("I/O ERROR: removing blocks after max space was hit\n");
-					return -EIO; // 
+					return -EIO;
 				}		
 			}
 			
@@ -945,7 +945,7 @@ change_size(ospfs_inode_t *oi, uint32_t new_size)
 		status = remove_block(oi);
 		if ( status == -EIO) {
 			eprintk("I/O ERROR: when removing blocks\n");
-			return -EIO
+			return -EIO;
 		}
 	}
 
@@ -1097,10 +1097,11 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 
 	// If the user is writing past the end of the file, change the file's
 	// size to accomodate the request.  (Use change_size().)
+	
 	// TODO: implement with change_size()
 	if (count > oi->oi_size-*f_pos) {
-		eprintk("count greater than current file size.\n");
-		eprintk("cutting count at file size because change_size() is not implemented yet\n");
+		eprintk("warning: change_size not yet implemented\n");
+		//change_size(oi, *f_pos+count)
 		count = oi->oi_size-*f_pos ;
 	}
 
