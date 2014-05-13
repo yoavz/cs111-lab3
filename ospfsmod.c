@@ -772,7 +772,7 @@ add_block(ospfs_inode_t *oi)
 	uint32_t *allocated[2] = { 0, 0 };
 
 	// if there is room in direct blocks, put it there
-	if ( n <= OSPFS_NDIRECT ) {
+	if ( n <= OSPFS_NDIRECT-1 ) {
 		uint32_t blockno = allocate_block();
 		if (blockno == 0) { return -ENOSPC; }
 
@@ -786,7 +786,7 @@ add_block(ospfs_inode_t *oi)
 		return 0;
 	} 
 	// if needing to allocate an indirect block
-	else if ( n == OSPFS_NDIRECT + 1 ) {
+	else if ( n == OSPFS_NDIRECT ) {
 		//alloc the indirect_block
 		uint32_t indirect_blockno = allocate_block();
 		//if there's no space...
@@ -817,7 +817,7 @@ add_block(ospfs_inode_t *oi)
 		return 0;	
 	}
 	// indirect block should be allocated, add it to there
-	else if ( n <= OSPFS_NDIRECT+OSPFS_NINDIRECT ) {
+	else if ( n <= OSPFS_NDIRECT+OSPFS_NINDIRECT-1 ) {
 		uint32_t blockno = allocate_block();
 		if (blockno == 0) { return -ENOSPC; }
 
@@ -832,7 +832,7 @@ add_block(ospfs_inode_t *oi)
 		return 0;
 	}
 	// if needing to allocate an indirect2 block
-	else if ( n == OSPFS_NDIRECT + OSPFS_NINDIRECT + 1) {
+	else if ( n == OSPFS_NDIRECT+OSPFS_NINDIRECT) {
 		uint32_t indirect2_blockno = allocate_block();
 		if (indirect2_blockno == 0) { return -ENOSPC; }
 		uint32_t indirect_blockno = allocate_block();
@@ -866,7 +866,7 @@ add_block(ospfs_inode_t *oi)
 		oi->oi_size += OSPFS_BLKSIZE ;
 	}
 	// indirect2 block should be allocated, add it to there
-	else if ( n <= OSPFS_MAXFILEBLKS ) {
+	else if ( n <= OSPFS_MAXFILEBLKS-1 ) {
 		uint32_t blockno = allocate_block();
 		if (blockno == 0) { return -ENOSPC; }
 		
