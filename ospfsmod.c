@@ -887,7 +887,8 @@ add_block(ospfs_inode_t *oi)
 			//zero out the new indirect block
 			indirect = ospfs_block(indirect2[indir2_index]);
 			memset(indirect, 0, OSPFS_BLKSIZE);
-		} else {
+		} 
+    else {
 			indirect = ospfs_block(indirect2[indir2_index]);
 		} 
 
@@ -932,7 +933,9 @@ add_block(ospfs_inode_t *oi)
 // deallocated.  Also, if you free a block, make sure that
 // you set the block pointer to 0.  Don't leave pointers to
 // deallocated blocks laying around!
-
+//
+//
+// TODO: if an inderect block should be there but isn't 
 static int
 remove_block(ospfs_inode_t *oi)
 {
@@ -940,7 +943,62 @@ remove_block(ospfs_inode_t *oi)
 	uint32_t n = ospfs_size2nblocks(oi->oi_size);
 
 	/* EXERCISE: Your code here */
-	return -EIO; // Replace this line
+  if ( n <= OSPFS_NDIRECT ){
+   free_block(oi->oi_direct[n-1]);
+   oi->oi_direct[n-1] = 0;
+   oi->oi_size -= OSPFS_BLKSIZE;
+   return 0;
+  }
+  else if ( n == OSPFS_NDIRECT + 1 ){
+    uint32_t indirect_blockno = oi->oi_indirect;
+    uint32_t *indirect_array = (uint32_t *)ospfs_block(indirect_blockno);
+    free_block(indirect_array[0]);
+    free_block(indirect_blockno);
+    oi->oi_indirect = 0;
+    oi->oi_size -= OSPFS_BLKSIZE;
+    return 0;
+  }
+  else if ( n <= OSPFS_NDIRECT+OSPFS_NDIRECT ) { 
+    uint32_t indirect_blockno = oi->oi_indirect;
+    uint32_t *indirect_array = (uint32_t *)ospfs_block(indirect_blockno);
+    free_block(indirect_array[n-OSPFS_NDIRECT-1]);
+    indirect_array[n-OSPFS_NDIRECT-1] = 0;
+    oi->oi_size -= OSPFS_BLKSIZE;
+    return 0;
+  }
+  else if ( n == OSPFS_NDIRECT+OSPFS_NINDIRECT+1 ) {
+    uint32_t indirect2_blockno = oi->oi_indirect2;
+    uint32_t *indirect2_array = ospfs_block(indirect2_blockno);
+    uint32_t indirect_blockno = indirect2_array[0];
+    uint32_t *indirect_array = ospfs_block(indirect_blockno);
+    uint32_t blockno = indirect_array[0];
+    free_block(indirect2_blockno);
+    free_block(indirect_blockno);
+    free_block(blockno);
+    oi->oi_indirect2 = 0;         //no need to set indirect_block to 0 since it is freed
+    oi->oi_size -= OSPFS_BLKSIZE;
+    return 0;
+  }
+  else if ( n <= OSPFS_MAXFILEBLKS ) {
+    uint32_t indirect2_blockno = oi->oi_indirect2;
+    uint32_t indir2_index = (n - OSPFS_NDIRECT - OSPFS_NINDIRECT - 1) / OSPFS_NINDIRECT;
+    uint32_t indir_index = (n - OSPFS_NDIRECT - OSPFS_NINDIRECT - 1) % OSPFS_NINDIRECT;
+    uint32_t *indirect2_array = ospfs_block(indirect2_blockno);
+    uint32_t indirect_blockno = indirect2_array[indir2_index];
+    uint32_t *indirect_array = ospfs_block(indirect_blockno);
+    uint32_t blockno = indirect_array[indir_index];
+    free_block(blockno);
+    indirect_array[indir_index] = 0;
+    if (indir_index == 0) {
+      free_block(indirect_blockno);
+      indirect2_array[indir2_index] = 0;
+    }
+    oi->oi_size -= OSPFS_BLKSIZE;
+    return 0;
+  }
+  else {
+	  return -EIO;
+  }
 }
 
 
