@@ -660,6 +660,77 @@ free_block(uint32_t blockno)
 // indirect block).  We use these functions in our implementation of
 // change_size.
 
+
+// int32_t indir2_index(uint32_t b)
+//	Returns the doubly-indirect block index for file block b.
+//
+// Inputs:  b -- the zero-based index of the file block (e.g., 0 for the first
+//		 block, 1 for the second, etc.)
+// Returns: 0 if block index 'b' requires using the doubly indirect
+//	       block, -1 if it does not.
+//
+// EXERCISE: Fill in this function.
+
+static int32_t
+indir2_index(uint32_t b)
+{
+	// Your code here.
+	return -1;
+}
+
+
+// int32_t indir_index(uint32_t b)
+//	Returns the indirect block index for file block b.
+//
+// Inputs:  b -- the zero-based index of the file block
+// Returns: -1 if b is one of the file's direct blocks;
+//	    0 if b is located under the file's first indirect block;
+//	    otherwise, the offset of the relevant indirect block within
+//		the doubly indirect block.
+//
+// EXERCISE: Fill in this function.
+
+static int32_t
+indir_index(uint32_t b)
+{
+	//if b is direct blocks
+		//return -1
+
+	//else if b is under first indirect block
+		//return 0
+
+	//else
+		//return offset	
+
+	return -1;
+}
+
+
+// int32_t direct_index(uint32_t b)
+//	Returns the direct block index for file block b.
+//
+// Inputs:  b -- the zero-based index of the file block
+// Returns: the index of block b in the relevant indirect block or the direct
+//	    block array.
+//
+// EXERCISE: Fill in this function.
+
+static int32_t
+direct_index(uint32_t b)
+{
+	if (b <= OSPFS_NDIRECT)
+		return b;
+	else if (b <= OSPFS_NDIRECT + OSPFS_NINDIRECT)
+		return indir_index(b);
+	else if (b <= OSPFS_MAXFILEBLKS)
+		return indir2_index(b);
+	else {
+		eprintk("max file blocks exceeded\n");
+		return -1;
+	}
+}
+
+
 // add_block(ospfs_inode_t *oi)
 //   Adds a single data block to a file, adding indirect and
 //   doubly-indirect blocks if necessary. (Helper function for
@@ -970,51 +1041,21 @@ remove_block(ospfs_inode_t *oi)
 static int
 change_size(ospfs_inode_t *oi, uint32_t new_size)
 {
-	int status;
 	uint32_t old_size = oi->oi_size;
-	uint32_t old_blocks = ospfs_size2nblocks(old_size);
+	int r = 0;
 
-	while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {	
-		status = add_block(oi);
-		if ( status == -ENOSPC ) {
-			eprintk("reached end of block space, deallocating blocks back\n");
-			// deallocate back to old block amount
-			while (ospfs_size2nblocks(oi->oi_size) > old_blocks) {
-				if (remove_block(oi) == -EIO) {
-					eprintk("I/O ERROR: removing blocks after max space was hit\n");
-					return -EIO;
-				}		
-			}
-			
-			// sanity check: at this point, oi->oi_size should == old_size
-			if (oi->oi_size != old_size ) {
-				eprintk("INCONSISTENCY ERROR: oi->size does not equal the old size after hitting max blocks and deallocating\n");
-			}
-
-			return -ENOSPC;
-
-		} else if ( status == -EIO ) {
-			eprintk("I/O ERROR: when adding blocks\n");
-			return -EIO;
-		} 	
+	while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {
+	        /* EXERCISE: Your code here */
+		return -EIO; // Replace this line
 	}
-
 	while (ospfs_size2nblocks(oi->oi_size) > ospfs_size2nblocks(new_size)) {
-		status = remove_block(oi);
-		if ( status == -EIO) {
-			eprintk("I/O ERROR: when removing blocks\n");
-			return -EIO;
-		}
+	        /* EXERCISE: Your code here */
+		return -EIO; // Replace this line
 	}
 
-	// at this point, oi should be completely reallocated to a new size
-	// final sanity check
-	if (ospfs_size2nblocks(oi->oi_size) != ospfs_size2nblocks(new_size) ||
-		oi->oi_size != new_size) {
-		eprintk("WARNING: oi->size does not equal new_size after change_size");
-	}
-
-	return 0;
+	/* EXERCISE: Make sure you update necessary file meta data
+	             and return the proper value. */
+	return -EIO; // Replace this line
 }
 
 
@@ -1155,11 +1196,10 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 
 	// If the user is writing past the end of the file, change the file's
 	// size to accomodate the request.  (Use change_size().)
-	
 	// TODO: implement with change_size()
 	if (count > oi->oi_size-*f_pos) {
-		eprintk("warning: change_size not yet implemented\n");
-		//change_size(oi, *f_pos+count)
+		eprintk("count greater than current file size.\n");
+		eprintk("cutting count at file size because change_size() is not implemented yet\n");
 		count = oi->oi_size-*f_pos ;
 	}
 
@@ -1272,7 +1312,31 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 	//    entries and return one of them.
 
 	/* EXERCISE: Your code here. */
-	return ERR_PTR(-EINVAL); // Replace this line
+  ospfs_direntry_t *dir_entry = NULL;
+  uint32_t dir_index = 0;
+  
+  while (dir_index < dir_oi->oi_size) {
+    dir_entry = ospfs_inode_data(dir_oi,dir_index);
+    if (dir_entry->od_ino = 0) {
+      //dir_entry points to an empty dir entry
+      break;
+    }
+    dir_entry = NULL;
+    dir_index += OSPFS_DIRENTRY_SIZE;
+  }
+
+  //we need to add a new block
+  if (dir_entry == NULL) {
+    int err;
+    err = change_size(dir_oi, dir_index + OSPFS_DIRENTRY_SIZE);
+    if (err < 0) {
+      return ERR_PTR(err);
+    }
+    dir_entry = ospfs_inode_data(dir_oi,dir_index);
+  }
+  dir_entry->od_ino = 0;
+  dir_entry->od_name[0] = 0;
+  return dir_entry;
 }
 
 // ospfs_link(src_dentry, dir, dst_dentry
@@ -1307,7 +1371,20 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 static int
 ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dentry) {
 	/* EXERCISE: Your code here. */
-	return -EINVAL;
+	ospfs_inode_t *dir_inode = ospfs_inode(dir->i_ino);
+  if (find_direntry(dir_inode, dst_dentry->d_name.name, dst_dentry->d_name.len) != NULL) {
+    return -EEXIST;
+  }
+
+  ospfs_direntry_t *new_entry = create_blank_direntry(ospfs_inode_t);
+  if (IS_ERR(new_entry)) {
+    return ERR_PTR(new_entry);
+  }
+
+  if (dst_dentry->d_name.len > OSPFS_MAXNAMELEN) {
+    return -ENAMETOOLONG;
+  }
+  return -EINVAL;
 }
 
 // ospfs_create
