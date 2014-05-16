@@ -583,7 +583,7 @@ allocate_block(void)
 	int max_blockno = ospfs_super->os_nblocks ;
 	void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
 	while ( blockno <= max_blockno ) {
-		if (bitvector_test(bitmap, blockno) == 0) {
+		if (bitvector_test(bitmap, blockno)) {
 			eprintk("Free block found, number %d", blockno);
 			bitvector_set(bitmap, blockno);
 			return blockno ;
@@ -633,7 +633,7 @@ free_block(uint32_t blockno)
 	} else {
 		//grab the pointer to the bitmap
 		void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
-		if (bitvector_test(bitmap, blockno) == 0)
+		if (bitvector_test(bitmap, blockno))
 			eprintk("Warning: freeing already freed block %d", blockno);
 		//clear the bit
 		bitvector_clear(bitmap, blockno);
@@ -1332,23 +1332,23 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 static int
 ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dentry) {
 	ospfs_inode_t *dir_inode = ospfs_inode(dir->i_ino);
+	ospfs_direntry_t *new_entry;
 	
-	if (find_direntry(dir_inode, dst_dentry->d_name.name, dst_dentry->d_name.len) != NULL) {
+	if (!find_direntry(dir_inode, dst_dentry->d_name.name, dst_dentry->d_name.len))
 		return -EEXIST;
-	}
 
-	ospfs_direntry_t *new_entry = create_blank_direntry(ospfs_inode_t);
+	new_entry = create_blank_direntry(dir_inode);
 	if (IS_ERR(new_entry))
 		return PTR_ERR(new_entry);
 
-  strncpy(new_entry->od_name, dst_dentry->d_name.name, dst_dentry->d_name.len);
-  new_entry->od_name[dst_dentry->d_name.len] = 0;
+	strncpy(new_entry->od_name, dst_dentry->d_name.name, dst_dentry->d_name.len);
+	new_entry->od_name[dst_dentry->d_name.len] = 0;
 
-  ospfs_inode_t *src_inode = ospfs_inode(src_dentry->d_inode->i_ino);
-  src_inode->oi_nlink++;
+	ospfs_inode_t *src_inode = ospfs_inode(src_dentry->d_inode->i_ino);
+	src_inode->oi_nlink++;
 
-  new_entry->od_ino = src_dentry->d_inode->i_ino;
-  return 0;
+	new_entry->od_ino = src_dentry->d_inode->i_ino;
+	return 0;
 }
 
 // ospfs_create
