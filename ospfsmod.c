@@ -867,63 +867,62 @@ remove_block(ospfs_inode_t *oi)
 	// current number of blocks in file
 	uint32_t n = ospfs_size2nblocks(oi->oi_size);
 
-	/* EXERCISE: Your code here */
-  if ( n <= OSPFS_NDIRECT ){
-   free_block(oi->oi_direct[n-1]);
-   oi->oi_direct[n-1] = 0;
-   oi->oi_size -= OSPFS_BLKSIZE;
-   return 0;
-  }
-  else if ( n == OSPFS_NDIRECT + 1 ){
-    uint32_t indirect_blockno = oi->oi_indirect;
-    uint32_t *indirect_array = (uint32_t *)ospfs_block(indirect_blockno);
-    free_block(indirect_array[0]);
-    free_block(indirect_blockno);
-    oi->oi_indirect = 0;
-    oi->oi_size -= OSPFS_BLKSIZE;
-    return 0;
-  }
-  else if ( n <= OSPFS_NDIRECT+OSPFS_NDIRECT ) { 
-    uint32_t indirect_blockno = oi->oi_indirect;
-    uint32_t *indirect_array = (uint32_t *)ospfs_block(indirect_blockno);
-    free_block(indirect_array[n-OSPFS_NDIRECT-1]);
-    indirect_array[n-OSPFS_NDIRECT-1] = 0;
-    oi->oi_size -= OSPFS_BLKSIZE;
-    return 0;
-  }
-  else if ( n == OSPFS_NDIRECT+OSPFS_NINDIRECT+1 ) {
-    uint32_t indirect2_blockno = oi->oi_indirect2;
-    uint32_t *indirect2_array = ospfs_block(indirect2_blockno);
-    uint32_t indirect_blockno = indirect2_array[0];
-    uint32_t *indirect_array = ospfs_block(indirect_blockno);
-    uint32_t blockno = indirect_array[0];
-    free_block(indirect2_blockno);
-    free_block(indirect_blockno);
-    free_block(blockno);
-    oi->oi_indirect2 = 0;         //no need to set indirect_block to 0 since it is freed
-    oi->oi_size -= OSPFS_BLKSIZE;
-    return 0;
-  }
-  else if ( n <= OSPFS_MAXFILEBLKS ) {
-    uint32_t indirect2_blockno = oi->oi_indirect2;
-    uint32_t indir2_index = (n - OSPFS_NDIRECT - OSPFS_NINDIRECT - 1) / OSPFS_NINDIRECT;
-    uint32_t indir_index = (n - OSPFS_NDIRECT - OSPFS_NINDIRECT - 1) % OSPFS_NINDIRECT;
-    uint32_t *indirect2_array = ospfs_block(indirect2_blockno);
-    uint32_t indirect_blockno = indirect2_array[indir2_index];
-    uint32_t *indirect_array = ospfs_block(indirect_blockno);
-    uint32_t blockno = indirect_array[indir_index];
-    free_block(blockno);
-    indirect_array[indir_index] = 0;
-    if (indir_index == 0) {
-      free_block(indirect_blockno);
-      indirect2_array[indir2_index] = 0;
-    }
-    oi->oi_size -= OSPFS_BLKSIZE;
-    return 0;
-  }
-  else {
-	  return -EIO;
-  }
+	if ( n <= OSPFS_NDIRECT ){
+		free_block(oi->oi_direct[n-1]);
+		oi->oi_direct[n-1] = 0;
+		oi->oi_size -= OSPFS_BLKSIZE;
+		return 0;
+	}
+	else if ( n == OSPFS_NDIRECT + 1 ){
+		uint32_t indirect_blockno = oi->oi_indirect;
+		uint32_t *indirect_array = (uint32_t *)ospfs_block(indirect_blockno);
+		free_block(indirect_array[0]);
+		free_block(indirect_blockno);
+		oi->oi_indirect = 0;
+		oi->oi_size -= OSPFS_BLKSIZE;
+		return 0;
+	}
+	else if ( n <= OSPFS_NDIRECT+OSPFS_NDIRECT ) { 
+		uint32_t indirect_blockno = oi->oi_indirect;
+		uint32_t *indirect_array = (uint32_t *)ospfs_block(indirect_blockno);
+		free_block(indirect_array[n-OSPFS_NDIRECT-1]);
+		indirect_array[n-OSPFS_NDIRECT-1] = 0;
+		oi->oi_size -= OSPFS_BLKSIZE;
+		return 0;
+	}
+	else if ( n == OSPFS_NDIRECT+OSPFS_NINDIRECT+1 ) {
+		uint32_t indirect2_blockno = oi->oi_indirect2;
+		uint32_t *indirect2_array = ospfs_block(indirect2_blockno);
+		uint32_t indirect_blockno = indirect2_array[0];
+		uint32_t *indirect_array = ospfs_block(indirect_blockno);
+		uint32_t blockno = indirect_array[0];
+		free_block(indirect2_blockno);
+		free_block(indirect_blockno);
+		free_block(blockno);
+		oi->oi_indirect2 = 0;         //no need to set indirect_block to 0 since it is freed
+		oi->oi_size -= OSPFS_BLKSIZE;
+		return 0;
+	}
+	else if ( n <= OSPFS_MAXFILEBLKS ) {
+		uint32_t indirect2_blockno = oi->oi_indirect2;
+		uint32_t indir2_index = (n - OSPFS_NDIRECT - OSPFS_NINDIRECT - 1) / OSPFS_NINDIRECT;
+		uint32_t indir_index = (n - OSPFS_NDIRECT - OSPFS_NINDIRECT - 1) % OSPFS_NINDIRECT;
+		uint32_t *indirect2_array = ospfs_block(indirect2_blockno);
+		uint32_t indirect_blockno = indirect2_array[indir2_index];
+		uint32_t *indirect_array = ospfs_block(indirect_blockno);
+		uint32_t blockno = indirect_array[indir_index];
+		free_block(blockno);
+		indirect_array[indir_index] = 0;
+		if (indir_index == 0) {
+			free_block(indirect_blockno);
+			indirect2_array[indir2_index] = 0;
+		}
+		oi->oi_size -= OSPFS_BLKSIZE;
+		return 0;
+	}
+	else {
+		  return -EIO;
+	}
 }
 
 
@@ -1079,55 +1078,55 @@ ospfs_notify_change(struct dentry *dentry, struct iattr *attr)
 static ssize_t
 ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 {
-  ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
-  int retval = 0;
-  size_t amount = 0;
-  uint32_t n;
-  uint32_t blockno;
-  uint32_t block_start ;
-  uint32_t block_end ;
-  uint32_t block_pos ;
+	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
+	int retval = 0;
+	size_t amount = 0;
+	uint32_t n;
+	uint32_t blockno;
+	uint32_t block_start ;
+	uint32_t block_end ;
+	uint32_t block_pos ;
 
-  // Make sure we don't read past the end of the file!
-  // Change 'count' so we never read past the end of the file.
-  if (count > oi->oi_size-*f_pos)
-    count = oi->oi_size-*f_pos ;
+	// Make sure we don't read past the end of the file!
+	// Change 'count' so we never read past the end of the file.
+	if (count > oi->oi_size-*f_pos)
+		count = oi->oi_size-*f_pos ;
 
-  // Copy the data to user block by block
-  while (amount < count && retval >= 0) {
-    blockno = ospfs_inode_blockno(oi, *f_pos);
+	// Copy the data to user block by block
+	while (amount < count && retval >= 0) {
+		blockno = ospfs_inode_blockno(oi, *f_pos);
 
-    // ospfs_inode_blockno returns 0 on error
-    if (blockno == 0) {
-      retval = -EIO;
-      goto done;
-    }
+		// ospfs_inode_blockno returns 0 on error
+		if (blockno == 0) {
+			retval = -EIO;
+			goto done;
+		}
 
-    block_start = (uint32_t) ospfs_block(blockno);
-    block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
-    block_pos = block_start + *f_pos % OSPFS_BLKSIZE;
+		block_start = (uint32_t) ospfs_block(blockno);
+		block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
+		block_pos = block_start + *f_pos % OSPFS_BLKSIZE;
 
-    // Figure out how much data is left in this block to read.
-    // Copy data into user space. Return -EFAULT if unable to write
-    // into user space.
-    // Use variable 'n' to track number of bytes moved.
-    n = block_end-block_pos;  
-    if ( amount+n > count )
-      n = count-amount ;
+		// Figure out how much data is left in this block to read.
+		// Copy data into user space. Return -EFAULT if unable to write
+		// into user space.
+		// Use variable 'n' to track number of bytes moved.
+		n = block_end-block_pos;  
+		if ( amount+n > count )
+			n = count-amount ;
 
-    if (copy_to_user(buffer, (const void *)block_pos, n) != 0) {
-      //copy_to_user returns non-zero only on error
-      retval = -EFAULT;
-      goto done;
-    }
+		if (copy_to_user(buffer, (const void *)block_pos, n) != 0) {
+			//copy_to_user returns non-zero only on error
+			retval = -EFAULT;
+			goto done;
+		}
 
-    buffer += n;
-    amount += n;
-    *f_pos += n;
-  }
+		buffer += n;
+		amount += n;
+		*f_pos += n;
+	}
 
-    done:
-  return (retval >= 0 ? amount : retval);
+	done:
+		return (retval >= 0 ? amount : retval);
 }
 
 
