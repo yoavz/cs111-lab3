@@ -1527,6 +1527,17 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 	}
 }
 
+// Helper function to ospfs_follow_link
+// returns index of char in string
+static int
+char_index(char c, char *string, int strlen)
+{
+	int i; for (i=0; i<strlen; i++)
+		if (c == string[i])
+			return i;
+
+	return -1;
+}
 
 // ospfs_follow_link(dentry, nd)
 //   Linux calls this function to follow a symbolic link.
@@ -1546,9 +1557,38 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	ospfs_symlink_inode_t *oi =
 		(ospfs_symlink_inode_t *) ospfs_inode(dentry->d_inode->i_ino);
-	// Exercise: Your code here.
+	
 
-	nd_set_link(nd, oi->oi_symlink);
+	int question_index = char_index('?', oi->oi_symlink, oi->oi_size);
+	int colon_index = char_index(':', oi->oi_symlink, oi->oi_size);
+
+	if (question_index > 0 && colon_index > 0 && colon_index > question_index && colon_index < oi->oi_size-1) {
+		// ab?cd:ef  length: 8
+		// 01234567
+
+		char *condition = kmalloc(question_index+1, GFP_ATOMIC);
+		memcpy(condition, oi->oi_symlink, question_index);
+		condition[question_index] = '\0'; 
+		char *path1 = kmalloc(colon_index-question_index, GFP_ATOMIC);
+		memcpy(path1, &oi->oi_symlink[question_index+1], colon_index-question_index-1);
+		path1[colon_index-question_index-1] = '\0';
+		char *path2 = kmalloc(oi->oi_size-colon_index, GFP_ATOMIC);
+		memcpy(path2, &oi->oi_symlink[colon_index+1], oi->oi_size-colon_index-1);
+		path2[oi->oi_size-colon_index-1] = '\0';
+		
+		//eprintk("condition link detected: %s, %s, %s\n", condition, path1, path2);	
+
+		if (strcmp(condition, "root") == 0 && current->uid == 0) {
+			nd_set_link(nd, path1);
+		} else {
+			//eprintk("uid: %d\n", current->uid);
+			nd_set_link(nd, path2);
+		}
+	} else {
+		nd_set_link(nd, oi->oi_symlink);
+	}
+
+
 	return (void *) 0;
 }
 
