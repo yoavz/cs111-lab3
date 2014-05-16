@@ -579,22 +579,21 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 static uint32_t
 allocate_block(void)
 {
-  //uint32_t offset = ospfs_super->os_firstinob + ospfs_super->os_ninodes/OSPFS_BLKINODES + ((ospfs_super->os_ninodes % OSPFS_BLKINODES) > 0 ? 1 : 0);
-  uint32_t blockno = 0; 
-  uint32_t max_blockno = ospfs_super->os_nblocks ;
-  void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
-  while ( blockno <= max_blockno ) {
-    if (bitvector_test(bitmap, blockno)) {
-      eprintk("Free block found, number %d\n", blockno);
-      bitvector_set(bitmap, blockno);
-      // actual block number is data block index + start of data blocks 
-      return blockno;
-    }
-    blockno++;
-  }
+	//uint32_t offset = ospfs_super->os_firstinob + ospfs_super->os_ninodes/OSPFS_BLKINODES + ((ospfs_super->os_ninodes % OSPFS_BLKINODES) > 0 ? 1 : 0);
+	uint32_t blockno = OSPFS_FREEMAP_BLK; 
+	void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
+	while ( blockno <= ospfs_super->os_nblocks ) {
+		if (bitvector_test(bitmap, blockno)) {
+			eprintk("Free block found, number %d\n", blockno);
+			bitvector_clear(bitmap, blockno);
+			// actual block number is data block index + start of data blocks 
+			return blockno;
+		}
+		blockno++;
+	}
 
-  //if a free block wasn't found, disk is full
-  return 0;
+	//if a free block wasn't found, disk is full
+	return 0;
 }
 
 
@@ -612,34 +611,33 @@ allocate_block(void)
 static void
 free_block(uint32_t blockno)
 {
-  uint32_t freemap_end = OSPFS_FREEMAP_BLK + ospfs_super->os_nblocks/OSPFS_BLKBITSIZE + ((ospfs_super->os_nblocks % OSPFS_BLKBITSIZE) > 0 ? 1 : 0);
-  uint32_t inode_end = ospfs_super->os_firstinob + ospfs_super->os_ninodes/OSPFS_BLKINODES + ((ospfs_super->os_ninodes % OSPFS_BLKINODES) > 0 ? 1 : 0);
+	uint32_t freemap_end = OSPFS_FREEMAP_BLK + ospfs_super->os_nblocks/OSPFS_BLKBITSIZE + ((ospfs_super->os_nblocks % OSPFS_BLKBITSIZE) > 0 ? 1 : 0);
+	uint32_t inode_end = ospfs_super->os_firstinob + ospfs_super->os_ninodes/OSPFS_BLKINODES + ((ospfs_super->os_ninodes % OSPFS_BLKINODES) > 0 ? 1 : 0);
 
-  // Defenses
-  if (blockno < 0) {
-    eprintk("Warning: tried freeing negative block %d\n", blockno);
-    return;
-  } else if (blockno == 0) {
-    eprintk("Warning: tried freeing the boot block\n");
-    return;
-  } else if (blockno == 1) {
-    eprintk("Warning: tried freeing the super block\n");
-    return;
-  } else if (blockno <= freemap_end ) {
-    eprintk("Warning: tried freeing the a bitmap block\n");
-    return;
-  } else if (blockno <= inode_end) {
-    eprintk("Warning: tried freeing the an inode block\n");
-    return;
-  } else {
-    //grab the pointer to the bitmap
-    void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
-    if (bitvector_test(bitmap, blockno))
-      eprintk("Warning: freeing already freed block %d\n", blockno);
-    //clear the bit
-    bitvector_clear(bitmap, blockno);
-    return;
-  }
+	// Defenses
+	if (blockno < 0) {
+		eprintk("Warning: tried freeing negative block %d\n", blockno);
+		return;
+	} else if (blockno == 0) {
+		eprintk("Warning: tried freeing the boot block\n");
+		return;
+	} else if (blockno == 1) {
+		eprintk("Warning: tried freeing the super block\n");
+		return;
+	} else if (blockno <= freemap_end ) {
+		eprintk("Warning: tried freeing the a bitmap block\n");
+		return;
+	} else if (blockno <= inode_end) {
+		eprintk("Warning: tried freeing the an inode block\n");
+		return;
+	} else {
+	//grab the pointer to the bitmap
+		void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
+		if (bitvector_test(bitmap, blockno))
+			eprintk("Warning: freeing already freed block %d\n", blockno);
+		bitvector_set(bitmap, blockno);
+		return;
+	}
 }
 
 
@@ -863,7 +861,6 @@ add_block(ospfs_inode_t *oi)
 // deallocated blocks laying around!
 //
 //
-// TODO: if an inderect block should be there but isn't 
 static int
 remove_block(ospfs_inode_t *oi)
 {
@@ -1154,68 +1151,65 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 static ssize_t
 ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *f_pos)
 {
-  ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
-  int retval = 0;
-  size_t amount = 0;
-  uint32_t block_start;
-  uint32_t block_end; 
-  uint32_t block_pos;
-  uint32_t blockno; 
-  uint32_t n;
-  char *data;
+	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
+	int retval = 0;
+	size_t amount = 0;
+	uint32_t block_start;
+	uint32_t block_end; 
+	uint32_t block_pos;
+	uint32_t blockno; 
+	uint32_t n;
+	char *data;
 
-  // Support files opened with the O_APPEND flag.  To detect O_APPEND,
-  // use struct file's f_flags field and the O_APPEND bit.
-  // TODO: implement
-  int append = 0;
-  if (filp->f_flags & O_APPEND) {
-    append = 1;
-  }
+	// If appending, set f_pos to end of file
+	if (filp->f_flags & O_APPEND) {
+		*f_pos = oi->oi_size ;
+	}
 
-  // If the user is writing past the end of the file, change the file's
-  // size to accomodate the request.  (Use change_size().)
-  if (count > oi->oi_size-*f_pos) {
-    eprintk("Changing size from %u to %lld\n", oi->oi_size, *f_pos+count);
-    change_size(oi, *f_pos+count);
-  }
+	// If the user is writing past the end of the file, change the file's
+	// size to accomodate the request.  (Use change_size().)
+	if (count > oi->oi_size-*f_pos) {
+		//eprintk("Changing size from %u to %lld\n", oi->oi_size, *f_pos+count);
+		change_size(oi, *f_pos+count);
+	}
 
-  // Copy data block by block
-  while (amount < count && retval >= 0) {
-    blockno = ospfs_inode_blockno(oi, *f_pos);
+	// Copy data block by block
+	while (amount < count && retval >= 0) {
+		blockno = ospfs_inode_blockno(oi, *f_pos);
 
-    if (blockno == 0) {
-      retval = -EIO;
-      goto done;
-    }
+		if (blockno == 0) {
+			retval = -EIO;
+			goto done;
+		}
 
-    data = ospfs_block(blockno);
+		data = ospfs_block(blockno);
 
-    block_start = (uint32_t) ospfs_block(blockno);
-    block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
-    block_pos = block_start + *f_pos % OSPFS_BLKSIZE;
+		block_start = (uint32_t) ospfs_block(blockno);
+		block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
+		block_pos = block_start + *f_pos % OSPFS_BLKSIZE;
 
-    // Figure out how much data is left in this block to write.
-    // Copy data from user space. Return -EFAULT if unable to read
-    // read user space.
-    // Keep track of the number of bytes moved in 'n'.
+		// Figure out how much data is left in this block to write.
+		// Copy data from user space. Return -EFAULT if unable to read
+		// read user space.
+		// Keep track of the number of bytes moved in 'n'.
 
-    n = block_end-block_pos ; 
-    if ( amount+n > count )
-      n = count-amount ;
+		n = block_end-block_pos ; 
+		if ( amount+n > count )
+			n = count-amount ;
 
-    if (copy_from_user((void *)block_pos, buffer, n) != 0) {
-      //copy_to_user returns non-zero only on error
-      retval = -EFAULT;
-      goto done;
-    }
+		if (copy_from_user((void *)block_pos, buffer, n) != 0) {
+			//copy_to_user returns non-zero only on error
+			retval = -EFAULT;
+			goto done;
+		}
 
-    buffer += n;
-    amount += n;
-    *f_pos += n;
-  }
+		buffer += n;
+		amount += n;
+		*f_pos += n;
+	}
 
-    done:
-  return (retval >= 0 ? amount : retval);
+	done:
+		return (retval >= 0 ? amount : retval);
 }
 
 
