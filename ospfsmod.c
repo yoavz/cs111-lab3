@@ -964,6 +964,7 @@ static int
 change_size(ospfs_inode_t *oi, uint32_t new_size)
 {
   uint32_t old_size = oi->oi_size;
+  int status;
 
   while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {  
     eprintk("change_size: current block size: %u\n", ospfs_size2nblocks(oi->oi_size));
@@ -1341,10 +1342,10 @@ ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dent
 		return PTR_ERR(new_entry);
 
   strncpy(new_entry->od_name, dst_dentry->d_name.name, dst_dentry->d_name.len);
-  new_entry->od_name[dst_entry->d_name.len] = 0;
+  new_entry->od_name[dst_dentry->d_name.len] = 0;
 
   ospfs_inode_t *src_inode = ospfs_inode(src_dentry->d_inode->i_ino);
-  src_inode->nlink++;
+  src_inode->oi_nlink++;
 
   new_entry->od_ino = src_dentry->d_inode->i_ino;
   return 0;
