@@ -579,25 +579,27 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 static uint32_t
 allocate_block(void)
 {
-	int blockno = 0; 
-	int max_blockno = ospfs_super->os_nblocks ;
-	void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
-	while ( blockno <= max_blockno ) {
-		if (bitvector_test(bitmap, blockno)) {
-			eprintk("Free block found, number %d", blockno);
-			bitvector_set(bitmap, blockno);
-			return blockno ;
-		}
-		blockno++;
-	}
+  //uint32_t offset = ospfs_super->os_firstinob + ospfs_super->os_ninodes/OSPFS_BLKINODES + ((ospfs_super->os_ninodes % OSPFS_BLKINODES) > 0 ? 1 : 0);
+  uint32_t blockno = 0; 
+  uint32_t max_blockno = ospfs_super->os_nblocks ;
+  void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
+  while ( blockno <= max_blockno ) {
+    if (bitvector_test(bitmap, blockno)) {
+      eprintk("Free block found, number %d\n", blockno);
+      bitvector_set(bitmap, blockno);
+      // actual block number is data block index + start of data blocks 
+      return blockno;
+    }
+    blockno++;
+  }
 
-	//if a free block wasn't found, disk is full
-	return 0;
+  //if a free block wasn't found, disk is full
+  return 0;
 }
 
 
 // free_block(blockno)
-//	Use this function to free an allocated block.
+//  Use this function to free an allocated block.
 //
 //   Inputs:  blockno -- the block number to be freed
 //   Returns: none
@@ -610,35 +612,34 @@ allocate_block(void)
 static void
 free_block(uint32_t blockno)
 {
-	uint32_t freemap_begin = OSPFS_FREEMAP_BLK ;
-	uint32_t freemap_end = freemap_begin + ospfs_super->os_nblocks/OSPFS_BLKBITSIZE + ((ospfs_super->os_nblocks % OSPFS_BLKBITSIZE) > 0 ? 1 : 0);
-	uint32_t inode_end = ospfs_super->os_firstinob + ospfs_super->os_ninodes/OSPFS_BLKINODES + ((ospfs_super->os_ninodes % OSPFS_BLKINODES) > 0 ? 1 : 0);
+  uint32_t freemap_end = OSPFS_FREEMAP_BLK + ospfs_super->os_nblocks/OSPFS_BLKBITSIZE + ((ospfs_super->os_nblocks % OSPFS_BLKBITSIZE) > 0 ? 1 : 0);
+  uint32_t inode_end = ospfs_super->os_firstinob + ospfs_super->os_ninodes/OSPFS_BLKINODES + ((ospfs_super->os_ninodes % OSPFS_BLKINODES) > 0 ? 1 : 0);
 
-	// Defenses
-	if (blockno < 0) {
-		eprintk("Warning: tried freeing negative block %d", blockno);
-		return;
-	} else if (blockno == 0) {
-		eprintk("Warning: tried freeing the boot block");
-		return;
-	} else if (blockno == 1) {
-		eprintk("Warning: tried freeing the super block");
-		return;
-	} else if (blockno <= freemap_end ) {
-		eprintk("Warning: tried freeing the a bitmap block");
-		return;
-	} else if (blockno <= inode_end) {
-		eprintk("Warning: tried freeing the an inode block");
-		return;
-	} else {
-		//grab the pointer to the bitmap
-		void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
-		if (bitvector_test(bitmap, blockno))
-			eprintk("Warning: freeing already freed block %d", blockno);
-		//clear the bit
-		bitvector_clear(bitmap, blockno);
-		return;
-	}
+  // Defenses
+  if (blockno < 0) {
+    eprintk("Warning: tried freeing negative block %d\n", blockno);
+    return;
+  } else if (blockno == 0) {
+    eprintk("Warning: tried freeing the boot block\n");
+    return;
+  } else if (blockno == 1) {
+    eprintk("Warning: tried freeing the super block\n");
+    return;
+  } else if (blockno <= freemap_end ) {
+    eprintk("Warning: tried freeing the a bitmap block\n");
+    return;
+  } else if (blockno <= inode_end) {
+    eprintk("Warning: tried freeing the an inode block\n");
+    return;
+  } else {
+    //grab the pointer to the bitmap
+    void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
+    if (bitvector_test(bitmap, blockno))
+      eprintk("Warning: freeing already freed block %d\n", blockno);
+    //clear the bit
+    bitvector_clear(bitmap, blockno);
+    return;
+  }
 }
 
 
