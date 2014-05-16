@@ -963,22 +963,60 @@ remove_block(ospfs_inode_t *oi)
 static int
 change_size(ospfs_inode_t *oi, uint32_t new_size)
 {
-	int status;
-	uint32_t old_size = oi->oi_size;
-	int r = 0;
+  uint32_t old_size = oi->oi_size;
 
-	while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {
-	        /* EXERCISE: Your code here */
-		return -EIO; // Replace this line
-	}
-	while (ospfs_size2nblocks(oi->oi_size) > ospfs_size2nblocks(new_size)) {
-	        /* EXERCISE: Your code here */
-		return -EIO; // Replace this line
-	}
+  while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {  
+    eprintk("change_size: current block size: %u\n", ospfs_size2nblocks(oi->oi_size));
+    status = add_block(oi);
+    if ( status == -ENOSPC ) {
+      eprintk("reached end of block space, deallocating blocks back\n");
+      
+      // the next while loop will dealloc blocks as necessary
+      new_size = old_size ;
+      break;
+  
+      /*
+      // deallocate back to old block amount
+      while (ospfs_size2nblocks(oi->oi_size) > old_blocks) {
+        if (remove_block(oi) == -EIO) {
+          eprintk("I/O ERROR: removing blocks after max space was hit\n");
+          return -EIO;
+        }   
+      }
+      
+      // sanity check: at this point, oi->oi_size should == old_size
+      if (oi->oi_size != old_size ) {
+        eprintk("INCONSISTENCY ERROR: oi->size does not equal the old size after hitting max blocks and deallocating\n");
+      }
 
-	/* EXERCISE: Make sure you update necessary file meta data
-	             and return the proper value. */
-	return -EIO; // Replace this line
+      return -ENOSPC; */
+
+    } else if ( status == -EIO ) {
+      eprintk("I/O ERROR: when adding blocks\n");
+      return -EIO;
+    }   
+
+    eprintk("change_size: added a block, new block size: %u\n", ospfs_size2nblocks(oi->oi_size));
+  }
+  while (ospfs_size2nblocks(oi->oi_size) > ospfs_size2nblocks(new_size)) {
+    eprintk("change_size: current block size: %u\n", ospfs_size2nblocks(oi->oi_size));
+    status = remove_block(oi);
+    if ( status == -EIO) {
+      eprintk("I/O ERROR: when removing blocks\n");
+      return -EIO;
+    }
+    eprintk("change_size: removed a block, new block size: %u\n", ospfs_size2nblocks(oi->oi_size));
+  }
+
+  // at this point, oi should have the correct amount of blocks
+  if (ospfs_size2nblocks(oi->oi_size) != ospfs_size2nblocks(new_size)) {
+    eprintk("WARNING: num blocks does not equal the amound new_size needs after change_size\n");
+  }
+  
+  // set the proper oi_size
+  oi->oi_size = new_size;  
+
+  return 0;
 }
 
 
@@ -1234,7 +1272,6 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 	//    Use ERR_PTR if this fails; otherwise, clear out all the directory
 	//    entries and return one of them.
 
-	/* EXERCISE: Your code here. */
 	ospfs_direntry_t *dir_entry = NULL;
 	uint32_t dir_index = 0;
   
