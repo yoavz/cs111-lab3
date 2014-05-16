@@ -653,84 +653,6 @@ free_block(uint32_t blockno)
  *
  */
 
-// The following functions are used in our code to unpack a block number into
-// its consituent pieces: the doubly indirect block number (if any), the
-// indirect block number (which might be one of many in the doubly indirect
-// block), and the direct block number (which might be one of many in an
-// indirect block).  We use these functions in our implementation of
-// change_size.
-
-
-// int32_t indir2_index(uint32_t b)
-//	Returns the doubly-indirect block index for file block b.
-//
-// Inputs:  b -- the zero-based index of the file block (e.g., 0 for the first
-//		 block, 1 for the second, etc.)
-// Returns: 0 if block index 'b' requires using the doubly indirect
-//	       block, -1 if it does not.
-//
-// EXERCISE: Fill in this function.
-
-static int32_t
-indir2_index(uint32_t b)
-{
-	// Your code here.
-	return -1;
-}
-
-
-// int32_t indir_index(uint32_t b)
-//	Returns the indirect block index for file block b.
-//
-// Inputs:  b -- the zero-based index of the file block
-// Returns: -1 if b is one of the file's direct blocks;
-//	    0 if b is located under the file's first indirect block;
-//	    otherwise, the offset of the relevant indirect block within
-//		the doubly indirect block.
-//
-// EXERCISE: Fill in this function.
-
-static int32_t
-indir_index(uint32_t b)
-{
-	//if b is direct blocks
-		//return -1
-
-	//else if b is under first indirect block
-		//return 0
-
-	//else
-		//return offset	
-
-	return -1;
-}
-
-
-// int32_t direct_index(uint32_t b)
-//	Returns the direct block index for file block b.
-//
-// Inputs:  b -- the zero-based index of the file block
-// Returns: the index of block b in the relevant indirect block or the direct
-//	    block array.
-//
-// EXERCISE: Fill in this function.
-
-static int32_t
-direct_index(uint32_t b)
-{
-	if (b <= OSPFS_NDIRECT)
-		return b;
-	else if (b <= OSPFS_NDIRECT + OSPFS_NINDIRECT)
-		return indir_index(b);
-	else if (b <= OSPFS_MAXFILEBLKS)
-		return indir2_index(b);
-	else {
-		eprintk("max file blocks exceeded\n");
-		return -1;
-	}
-}
-
-
 // add_block(ospfs_inode_t *oi)
 //   Adds a single data block to a file, adding indirect and
 //   doubly-indirect blocks if necessary. (Helper function for
@@ -1041,6 +963,7 @@ remove_block(ospfs_inode_t *oi)
 static int
 change_size(ospfs_inode_t *oi, uint32_t new_size)
 {
+	int status;
 	uint32_t old_size = oi->oi_size;
 	int r = 0;
 
@@ -1312,31 +1235,31 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 	//    entries and return one of them.
 
 	/* EXERCISE: Your code here. */
-  ospfs_direntry_t *dir_entry = NULL;
-  uint32_t dir_index = 0;
+	ospfs_direntry_t *dir_entry = NULL;
+	uint32_t dir_index = 0;
   
-  while (dir_index < dir_oi->oi_size) {
-    dir_entry = ospfs_inode_data(dir_oi,dir_index);
-    if (dir_entry->od_ino = 0) {
-      //dir_entry points to an empty dir entry
-      break;
-    }
-    dir_entry = NULL;
-    dir_index += OSPFS_DIRENTRY_SIZE;
-  }
+	while (dir_index < dir_oi->oi_size) {
+		dir_entry = ospfs_inode_data(dir_oi, dir_index);
+		if (dir_entry->od_ino == 0) {
+			//dir_entry points to an empty dir entry
+			break;
+		}
+		dir_entry = NULL;
+		dir_index += OSPFS_DIRENTRY_SIZE;
+	}
 
-  //we need to add a new block
-  if (dir_entry == NULL) {
-    int err;
-    err = change_size(dir_oi, dir_index + OSPFS_DIRENTRY_SIZE);
-    if (err < 0) {
-      return ERR_PTR(err);
-    }
-    dir_entry = ospfs_inode_data(dir_oi,dir_index);
-  }
-  dir_entry->od_ino = 0;
-  dir_entry->od_name[0] = 0;
-  return dir_entry;
+  	//we need to add a new block
+	if (dir_entry == NULL) {
+		int err;
+		err = change_size(dir_oi, dir_index + OSPFS_DIRENTRY_SIZE);
+		if (err < 0) {
+			return ERR_PTR(err);
+		}
+		dir_entry = ospfs_inode_data(dir_oi,dir_index);
+	}
+	dir_entry->od_ino = 0;
+	dir_entry->od_name[0] = 0;
+	return dir_entry;
 }
 
 // ospfs_link(src_dentry, dir, dst_dentry
@@ -1370,20 +1293,15 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 
 static int
 ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dentry) {
-	/* EXERCISE: Your code here. */
 	ospfs_inode_t *dir_inode = ospfs_inode(dir->i_ino);
-  if (find_direntry(dir_inode, dst_dentry->d_name.name, dst_dentry->d_name.len) != NULL) {
-    return -EEXIST;
-  }
+	
+	if (find_direntry(dir_inode, dst_dentry->d_name.name, dst_dentry->d_name.len) != NULL) {
+		return -EEXIST;
+	}
 
-  ospfs_direntry_t *new_entry = create_blank_direntry(ospfs_inode_t);
-  if (IS_ERR(new_entry)) {
-    return ERR_PTR(new_entry);
-  }
-
-  if (dst_dentry->d_name.len > OSPFS_MAXNAMELEN) {
-    return -ENAMETOOLONG;
-  }
+	ospfs_direntry_t *new_entry = create_blank_direntry(ospfs_inode_t);
+	if (IS_ERR(new_entry))
+		return PTR_ERR(new_entry);
 
   strncpy(new_entry->od_name, dst_dentry->d_name.name, dst_dentry->d_name.len);
   new_entry->od_name[dst_entry->d_name.len] = 0;
@@ -1428,9 +1346,48 @@ static int
 ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
+	ospfs_inode_t *new_oi;
+	ospfs_direntry_t *new_direntry ;
 	uint32_t entry_ino = 0;
-	/* EXERCISE: Your code here. */
-	return -EINVAL; // Replace this line
+	
+	
+	// check if file name is too long
+	if (dentry->d_name.len > OSPFS_MAXNAMELEN) 	
+		return -ENAMETOOLONG;
+
+	// check for a file named the same in the dir already: EEXIST error 
+	if (find_direntry(dir_oi, dentry->d_name.name, dentry->d_name.len))
+		return -EEXIST;
+
+	// make a new dir entry
+	new_direntry = create_blank_direntry(dir_oi);
+	if (IS_ERR(new_direntry))
+		return PTR_ERR(new_direntry);
+
+
+	// iterate through all inodes and find an empty one
+	while (entry_ino < ospfs_super->os_ninodes) {
+		new_oi = ospfs_inode(entry_ino);
+		if (new_oi != 0 && new_oi->oi_nlink == 0) {
+			break;		
+		}
+		entry_ino++;
+	}		
+
+	// if it reached ninodes, there are no free ones :( 
+	if (entry_ino >= ospfs_super->os_ninodes)
+		return -ENOSPC;
+
+	// set attributes of new file inode
+	new_oi->oi_size = 0 ; // empty file for now
+	new_oi->oi_ftype = OSPFS_FTYPE_REG ;
+	new_oi->oi_nlink = 1 ;
+	new_oi->oi_mode = (uint32_t) mode ;
+
+	// set attributes of direntry
+	new_direntry->od_ino = entry_ino ;
+	memcpy(new_direntry->od_name, dentry->d_name.name, dentry->d_name.len) ;
+	new_direntry->od_name[dentry->d_name.len] = '\0' ; //null terminate the name
 
 	/* Execute this code after your function has successfully created the
 	   file.  Set entry_ino to the created file's inode number before
