@@ -1076,52 +1076,55 @@ ospfs_notify_change(struct dentry *dentry, struct iattr *attr)
 static ssize_t
 ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 {
-	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
-	int retval = 0;
-	size_t amount = 0;
+  ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
+  int retval = 0;
+  size_t amount = 0;
+  uint32_t n;
+  uint32_t blockno;
+  uint32_t block_start ;
+  uint32_t block_end ;
+  uint32_t block_pos ;
 
-	// Make sure we don't read past the end of the file!
-	// Change 'count' so we never read past the end of the file.
-	if (count > oi->oi_size-*f_pos)
-		count = oi->oi_size-*f_pos ;
+  // Make sure we don't read past the end of the file!
+  // Change 'count' so we never read past the end of the file.
+  if (count > oi->oi_size-*f_pos)
+    count = oi->oi_size-*f_pos ;
 
-	// Copy the data to user block by block
-	while (amount < count && retval >= 0) {
-		uint32_t blockno = ospfs_inode_blockno(oi, *f_pos);
-		uint32_t n;
-		char *data;
+  // Copy the data to user block by block
+  while (amount < count && retval >= 0) {
+    blockno = ospfs_inode_blockno(oi, *f_pos);
 
-		// ospfs_inode_blockno returns 0 on error
-		if (blockno == 0) {
-			retval = -EIO;
-			goto done;
-		}
+    // ospfs_inode_blockno returns 0 on error
+    if (blockno == 0) {
+      retval = -EIO;
+      goto done;
+    }
 
-		uint32_t block_start = (uint32_t) ospfs_block(blockno);
-		uint32_t block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
-		uint32_t block_pos = (uint32_t) block_start + *f_pos % OSPFS_BLKSIZE;
+    block_start = (uint32_t) ospfs_block(blockno);
+    block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
+    block_pos = block_start + *f_pos % OSPFS_BLKSIZE;
 
-		// Figure out how much data is left in this block to read.
-		// Copy data into user space. Return -EFAULT if unable to write
-		// into user space.
-		// Use variable 'n' to track number of bytes moved.
-		n = block_end-block_pos;	
-		if ( amount+n > count )
-			n = count-amount ;
+    // Figure out how much data is left in this block to read.
+    // Copy data into user space. Return -EFAULT if unable to write
+    // into user space.
+    // Use variable 'n' to track number of bytes moved.
+    n = block_end-block_pos;  
+    if ( amount+n > count )
+      n = count-amount ;
 
-		if (copy_to_user(buffer, block_pos, n) != 0) {
-			//copy_to_user returns non-zero only on error
-			retval = -EFAULT;
-			goto done;
-		}
+    if (copy_to_user(buffer, (const void *)block_pos, n) != 0) {
+      //copy_to_user returns non-zero only on error
+      retval = -EFAULT;
+      goto done;
+    }
 
-		buffer += n;
-		amount += n;
-		*f_pos += n;
-	}
+    buffer += n;
+    amount += n;
+    *f_pos += n;
+  }
 
     done:
-	return (retval >= 0 ? amount : retval);
+  return (retval >= 0 ? amount : retval);
 }
 
 
@@ -1145,65 +1148,68 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 static ssize_t
 ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *f_pos)
 {
-	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
-	int retval = 0;
-	size_t amount = 0;
+  ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
+  int retval = 0;
+  size_t amount = 0;
+  uint32_t block_start;
+  uint32_t block_end; 
+  uint32_t block_pos;
+  uint32_t blockno; 
+  uint32_t n;
+  char *data;
 
-	// Support files opened with the O_APPEND flag.  To detect O_APPEND,
-	// use struct file's f_flags field and the O_APPEND bit.
-	int append = 0;
-	if (filp->f_flags & O_APPEND) {
-		append = 1;
-	}
+  // Support files opened with the O_APPEND flag.  To detect O_APPEND,
+  // use struct file's f_flags field and the O_APPEND bit.
+  // TODO: implement
+  int append = 0;
+  if (filp->f_flags & O_APPEND) {
+    append = 1;
+  }
 
-	// If the user is writing past the end of the file, change the file's
-	// size to accomodate the request.  (Use change_size().)
-	// TODO: implement with change_size()
-	if (count > oi->oi_size-*f_pos) {
-		eprintk("count greater than current file size.\n");
-		eprintk("cutting count at file size because change_size() is not implemented yet\n");
-		count = oi->oi_size-*f_pos ;
-	}
+  // If the user is writing past the end of the file, change the file's
+  // size to accomodate the request.  (Use change_size().)
+  if (count > oi->oi_size-*f_pos) {
+    eprintk("Changing size from %u to %lld\n", oi->oi_size, *f_pos+count);
+    change_size(oi, *f_pos+count);
+  }
 
-	// Copy data block by block
-	while (amount < count && retval >= 0) {
-		uint32_t blockno = ospfs_inode_blockno(oi, *f_pos);
-		uint32_t n;
-		char *data;
+  // Copy data block by block
+  while (amount < count && retval >= 0) {
+    blockno = ospfs_inode_blockno(oi, *f_pos);
 
-		if (blockno == 0) {
-			retval = -EIO;
-			goto done;
-		}
+    if (blockno == 0) {
+      retval = -EIO;
+      goto done;
+    }
 
-		data = ospfs_block(blockno);
+    data = ospfs_block(blockno);
 
-		uint32_t block_start = (uint32_t) ospfs_block(blockno);
-		uint32_t block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
-		uint32_t block_pos = (uint32_t) block_start + *f_pos % OSPFS_BLKSIZE;
+    block_start = (uint32_t) ospfs_block(blockno);
+    block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
+    block_pos = block_start + *f_pos % OSPFS_BLKSIZE;
 
-		// Figure out how much data is left in this block to write.
-		// Copy data from user space. Return -EFAULT if unable to read
-		// read user space.
-		// Keep track of the number of bytes moved in 'n'.
+    // Figure out how much data is left in this block to write.
+    // Copy data from user space. Return -EFAULT if unable to read
+    // read user space.
+    // Keep track of the number of bytes moved in 'n'.
 
-		n = block_end-block_pos ;	
-		if ( amount+n > count )
-			n = count-amount ;
+    n = block_end-block_pos ; 
+    if ( amount+n > count )
+      n = count-amount ;
 
-		if (copy_from_user(block_pos, buffer, n) != 0) {
-			//copy_to_user returns non-zero only on error
-			retval = -EFAULT;
-			goto done;
-		}
+    if (copy_from_user((void *)block_pos, buffer, n) != 0) {
+      //copy_to_user returns non-zero only on error
+      retval = -EFAULT;
+      goto done;
+    }
 
-		buffer += n;
-		amount += n;
-		*f_pos += n;
-	}
+    buffer += n;
+    amount += n;
+    *f_pos += n;
+  }
 
     done:
-	return (retval >= 0 ? amount : retval);
+  return (retval >= 0 ? amount : retval);
 }
 
 
