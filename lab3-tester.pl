@@ -6,7 +6,7 @@ $lines++ while defined($_ = <FOO>);
 close FOO;
 
 @tests = (
-    # test reading
+    # test reading 1-3
     [ 'diff base/hello.txt test/hello.txt >/dev/null 2>&1 && echo $?',
       "0"
     ],
@@ -19,7 +19,7 @@ close FOO;
       "91308"
     ],
 
-    # test writing
+    # test writing 4-8
     # We use dd to write because it doesn't initially truncate, and it can
     # be told to seek forward to a particular point in the disk.
     [ "echo Bybye | dd bs=1 count=5 of=test/hello.txt conv=notrunc >/dev/null 2>&1 ; cat test/hello.txt",
@@ -42,17 +42,17 @@ close FOO;
       "Hello, world!"
     ],
     
-    # create a file
+    # create a file 9
     [ 'touch test/file1 && echo $?',
       "0"
     ],
 
-    # read directory
+    # read directory 10
     [ 'touch test/dir-contents.txt ; ls test | tee test/dir-contents.txt | grep file1',
       'file1'
     ],
 
-    # write files, remove them, then read dir again
+    # write files, remove them, then read dir again 11
     [ 'ls test | dd bs=1 of=test/dir-contents.txt >/dev/null 2>&1; ' .
       ' touch test/foo test/bar test/baz && '.
       ' rm    test/foo test/bar test/baz && '.
@@ -60,33 +60,33 @@ close FOO;
       ''
     ],
 
-    # remove the last file
+    # remove the last file 12
     [ 'rm -f test/dir-contents.txt && ls test | grep dir-contents.txt',
       ''
     ],
 
 
-    # write to a file
+    # write to a file 13
     [ 'echo hello > test/file1 && cat test/file1',
       'hello'
     ],
     
-    # append to a file
+    # append to a file 14
     [ 'echo hello > test/file1 ; echo goodbye >> test/file1 && cat test/file1',
       'hello goodbye'
     ],
 
-    # delete a file
+    # delete a file 15
     [ 'rm -f test/file1 && ls test | grep file1',
       ''
     ],
 
-    # make a larger file for indirect blocks
+    # make a larger file for indirect blocks 16
     [ 'yes | head -n 5632 > test/yes.txt && ls -l test/yes.txt | awk \'{ print $5 }\'',
       '11264'
     ],
    
-    # truncate the large file
+    # truncate the large file 17
     [ 'echo truncernated11 > test/yes.txt | ls -l test/yes.txt | awk \'{ print $5 }\' ; rm test/yes.txt',
       '15'
     ],

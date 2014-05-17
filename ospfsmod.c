@@ -451,7 +451,6 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		/* If at the end of the directory, set 'r' to 1 and exit
 		 * the loop.  For now we do this all the time.
 		 */
-		//TODO: can a directory have multiple blocks?
 		if (dir_oi->oi_size <= f_pos - 2) {
 			r = 1;
 			break;
@@ -548,6 +547,11 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 
 	od->od_ino = 0;
 	oi->oi_nlink--;
+
+	// free the blocks if nlink is zero, except in case of symlink
+	if (oi->oi_ftype != OSPFS_FTYPE_SYMLINK && oi->oi_nlink == 0)
+		change_size(oi, 0);
+
 	return 0;
 }
 
@@ -584,7 +588,7 @@ allocate_block(void)
 	void *bitmap = ospfs_block(OSPFS_FREEMAP_BLK);
 	while ( blockno <= ospfs_super->os_nblocks ) {
 		if (bitvector_test(bitmap, blockno)) {
-			eprintk("Free block found, number %d\n", blockno);
+			//eprintk("Free block found, number %d\n", blockno);
 			bitvector_clear(bitmap, blockno);
 			// actual block number is data block index + start of data blocks 
 			return blockno;
@@ -965,61 +969,45 @@ remove_block(ospfs_inode_t *oi)
 static int
 change_size(ospfs_inode_t *oi, uint32_t new_size)
 {
-  uint32_t old_size = oi->oi_size;
-  int status;
+	uint32_t old_size = oi->oi_size;
+	int status;
 
-  while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {  
-    eprintk("change_size: current block size: %u\n", ospfs_size2nblocks(oi->oi_size));
-    status = add_block(oi);
-    if ( status == -ENOSPC ) {
-      eprintk("reached end of block space, deallocating blocks back\n");
-      
-      // the next while loop will dealloc blocks as necessary
-      new_size = old_size ;
-      break;
-  
-      /*
-      // deallocate back to old block amount
-      while (ospfs_size2nblocks(oi->oi_size) > old_blocks) {
-        if (remove_block(oi) == -EIO) {
-          eprintk("I/O ERROR: removing blocks after max space was hit\n");
-          return -EIO;
-        }   
-      }
-      
-      // sanity check: at this point, oi->oi_size should == old_size
-      if (oi->oi_size != old_size ) {
-        eprintk("INCONSISTENCY ERROR: oi->size does not equal the old size after hitting max blocks and deallocating\n");
-      }
+	while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {  
+		//eprintk("change_size: current block size: %u\n", ospfs_size2nblocks(oi->oi_size));
+		status = add_block(oi);
+		if ( status == -ENOSPC ) {
+			eprintk("reached end of block space, deallocating blocks back\n");
 
-      return -ENOSPC; */
+			// the next while loop will dealloc blocks as necessary
+			new_size = old_size ;
+			break;
+		} else if ( status == -EIO ) {
+			eprintk("I/O ERROR: when adding blocks\n");
+			return -EIO;
+		}   
 
-    } else if ( status == -EIO ) {
-      eprintk("I/O ERROR: when adding blocks\n");
-      return -EIO;
-    }   
+		//eprintk("change_size: added a block, new block size: %u\n", ospfs_size2nblocks(oi->oi_size));
+	}
 
-    eprintk("change_size: added a block, new block size: %u\n", ospfs_size2nblocks(oi->oi_size));
-  }
-  while (ospfs_size2nblocks(oi->oi_size) > ospfs_size2nblocks(new_size)) {
-    eprintk("change_size: current block size: %u\n", ospfs_size2nblocks(oi->oi_size));
-    status = remove_block(oi);
-    if ( status == -EIO) {
-      eprintk("I/O ERROR: when removing blocks\n");
-      return -EIO;
-    }
-    eprintk("change_size: removed a block, new block size: %u\n", ospfs_size2nblocks(oi->oi_size));
-  }
+	while (ospfs_size2nblocks(oi->oi_size) > ospfs_size2nblocks(new_size)) {
+		//eprintk("change_size: current block size: %u\n", ospfs_size2nblocks(oi->oi_size));
+		status = remove_block(oi);
+		if ( status == -EIO) {
+			eprintk("I/O ERROR: when removing blocks\n");
+			return -EIO;
+		}
+		//eprintk("change_size: removed a block, new block size: %u\n", ospfs_size2nblocks(oi->oi_size));
+	}
 
-  // at this point, oi should have the correct amount of blocks
-  if (ospfs_size2nblocks(oi->oi_size) != ospfs_size2nblocks(new_size)) {
-    eprintk("WARNING: num blocks does not equal the amound new_size needs after change_size\n");
-  }
-  
-  // set the proper oi_size
-  oi->oi_size = new_size;  
+	// at this point, oi should have the correct amount of blocks
+	if (ospfs_size2nblocks(oi->oi_size) != ospfs_size2nblocks(new_size)) {
+		eprintk("WARNING: num blocks does not equal the amound new_size needs after change_size\n");
+	}
 
-  return 0;
+	// set the proper oi_size
+	oi->oi_size = new_size;  
+
+	return 0;
 }
 
 
@@ -1103,7 +1091,7 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 		}
 
 		block_start = (uint32_t) ospfs_block(blockno);
-		block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
+		block_end = (uint32_t) ospfs_block(blockno+1); 
 		block_pos = block_start + *f_pos % OSPFS_BLKSIZE;
 
 		// Figure out how much data is left in this block to read.
@@ -1184,7 +1172,7 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		data = ospfs_block(blockno);
 
 		block_start = (uint32_t) ospfs_block(blockno);
-		block_end = (uint32_t) ospfs_block(blockno+1); //TODO: check for final block?
+		block_end = (uint32_t) ospfs_block(blockno+1); 
 		block_pos = block_start + *f_pos % OSPFS_BLKSIZE;
 
 		// Figure out how much data is left in this block to write.
@@ -1338,8 +1326,9 @@ static int
 ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dentry) {
 	ospfs_inode_t *dir_inode = ospfs_inode(dir->i_ino);
 	ospfs_direntry_t *new_entry;
+	ospfs_inode_t *src_inode;
 	
-	if (!find_direntry(dir_inode, dst_dentry->d_name.name, dst_dentry->d_name.len))
+	if (find_direntry(dir_inode, dst_dentry->d_name.name, dst_dentry->d_name.len))
 		return -EEXIST;
 
 	new_entry = create_blank_direntry(dir_inode);
@@ -1349,7 +1338,7 @@ ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dent
 	strncpy(new_entry->od_name, dst_dentry->d_name.name, dst_dentry->d_name.len);
 	new_entry->od_name[dst_dentry->d_name.len] = 0;
 
-	ospfs_inode_t *src_inode = ospfs_inode(src_dentry->d_inode->i_ino);
+	src_inode = ospfs_inode(src_dentry->d_inode->i_ino);
 	src_inode->oi_nlink++;
 
 	new_entry->od_ino = src_dentry->d_inode->i_ino;
@@ -1566,13 +1555,14 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 		// ab?cd:ef  length: 8
 		// 01234567
 
-		char *condition = kmalloc(question_index+1, GFP_ATOMIC);
+		char *condition, *path1, *path2 ;
+		condition = kmalloc(question_index+1, GFP_ATOMIC);
 		memcpy(condition, oi->oi_symlink, question_index);
 		condition[question_index] = '\0'; 
-		char *path1 = kmalloc(colon_index-question_index, GFP_ATOMIC);
+		path1 = kmalloc(colon_index-question_index, GFP_ATOMIC);
 		memcpy(path1, &oi->oi_symlink[question_index+1], colon_index-question_index-1);
 		path1[colon_index-question_index-1] = '\0';
-		char *path2 = kmalloc(oi->oi_size-colon_index, GFP_ATOMIC);
+		path2 = kmalloc(oi->oi_size-colon_index, GFP_ATOMIC);
 		memcpy(path2, &oi->oi_symlink[colon_index+1], oi->oi_size-colon_index-1);
 		path2[oi->oi_size-colon_index-1] = '\0';
 		
